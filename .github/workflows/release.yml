@@ -1,0 +1,35 @@
+# Builds the given commit of the private source repo GNchoo/agent-browser, signs it and publishes it here as a
+# release. The "release" environment waits for the owner's approval (GitHub app / e-mail / Actions page) before
+# anything runs; the signing key exists only as a secret of that environment. Requested by: node scripts/release.mjs
+name: release
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: agent-browser commit SHA
+        required: true
+permissions:
+  contents: write # create the release in this repo
+concurrency: release
+jobs:
+  publish:
+    runs-on: windows-latest
+    environment: release
+    steps:
+      # pinned to commits: this job holds the signing key once approved
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: GNchoo/agent-browser
+          ref: ${{ inputs.ref }}
+          ssh-key: ${{ secrets.SOURCE_DEPLOY_KEY }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node scripts/publish.mjs
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASES_REPO: ${{ github.repository }}
+          SOURCE_SHA: ${{ inputs.ref }}
